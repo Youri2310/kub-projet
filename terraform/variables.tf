@@ -1,4 +1,4 @@
-variable "vm_type" {
+variable "machine_type" {
   type        = string
   description = "Type de la machine choisis parmis les proposés "
 }

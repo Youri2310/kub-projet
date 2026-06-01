@@ -60,7 +60,7 @@ resource "docker_image" "vm_mac" {
   count = var.target_node == "mac" ? 1 : 0
 
   provider     = docker.mac
-  name         = local.images[var.vm_type]
+  name         = local.images[var.machine_type]
   keep_locally = true
 }
 
@@ -68,7 +68,7 @@ resource "docker_image" "vm_windows" {
   count = var.target_node == "windows" ? 1 : 0
 
   provider     = docker.windows
-  name         = local.images[var.vm_type]
+  name         = local.images[var.machine_type]
   keep_locally = true
 }
 
@@ -79,21 +79,21 @@ locals {
 
 # Démarrer container
 resource "docker_container" "vm" {
-  name  = "provisioned-${var.vm_type}-${formatdate("YYYYMMDDhhmm", timestamp())}"
+  name  = "provisioned-${var.machine_type}-${formatdate("YYYYMMDDhhmm", timestamp())}"
   image = local.image_id
 
   memory = var.ram
 
-  env = local.envs[var.vm_type]
+  env = local.envs[var.machine_type]
 
   volumes {
-    host_path      = "/var/lib/docker/volumes/${var.vm_type}-data/_data"
+    host_path      = "/var/lib/docker/volumes/${var.machine_type}-data/_data"
     container_path = "/data"
     read_only      = false
   }
 
   dynamic "ports" {
-    for_each = local.ports[var.vm_type]
+    for_each = local.ports[var.machine_type]
 
     content {
       internal = ports.value.internal
