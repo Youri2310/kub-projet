@@ -1,4 +1,4 @@
-variable "machine_type" {
+variable "vm_type" {
   type        = string
   description = "Type de la machine choisis parmis les proposés "
 }
@@ -20,6 +20,6 @@ variable "ram" {
 
 variable "disk" {
   type        = number
-  description = "Taille du disque de la machine (de 5go à 100go)"
+  description = "Taille du disque de la vm (de 5go à 100go)"
 
 }
