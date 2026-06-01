@@ -17,12 +17,28 @@ export default function ReviewStep({ config, onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ link: string; pass: string } | null>(null);
 
-  const handleProvision = () => {
+  const handleProvision = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setResult({ link: "http://192.168.1.25:8080", pass: "K9s_Secure_Pwd" });
+    
+    //Faux timeout pour faire genre d'attendre t'a capté et tout
+    // setTimeout(() => {
+    //   setResult({ link: "http://192.168.1.25:8080", pass: "K9s_Secure_Pwd" });
+    //   setLoading(false);
+    // }, 3000);µ
+    
+    try {
+      const res = await fetch("/api/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      setResult({ link: data.link ?? "N/A", pass: data.pass ?? "N/A" });
+    } catch (e) {
+      console.error(e);
+    } finally {
       setLoading(false);
-    }, 3000);
+    }
   };
 
   const rows = [
