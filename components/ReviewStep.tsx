@@ -15,7 +15,7 @@ type Props = {
 
 export default function ReviewStep({ config, onBack }: Props) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ link: string; pass: string } | null>(null);
+  const [result, setResult] = useState<{ login: string; link?: string; ssh?: string; pass: string } | null>(null);
 
   const handleProvision = async () => {
     setLoading(true);
@@ -33,7 +33,7 @@ export default function ReviewStep({ config, onBack }: Props) {
         body: JSON.stringify(config),
       });
       const data = await res.json();
-      setResult({ link: data.link ?? "N/A", pass: data.pass ?? "N/A" });
+      setResult({ login: data.login ?? "root", link: data.link, ssh: data.ssh, pass: data.pass ?? "N/A" });
     } catch (e) {
       console.error(e);
     } finally {
@@ -97,16 +97,33 @@ export default function ReviewStep({ config, onBack }: Props) {
           <p className="text-white font-bold mb-4">✅ Machine déployée avec succès !</p>
           <div className="space-y-3">
             <div>
-              <p className="text-white/40 text-xs mb-1">Lien d'accès</p>
-              <a
-                href={result.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white underline underline-offset-2 text-sm hover:text-white/80"
-              >
-                {result.link}
-              </a>
+              <p className="text-white/40 text-xs mb-1">Login</p>
+              <code className="bg-white/10 text-white px-3 py-1.5 rounded-lg text-sm font-mono">
+                {result.login}
+              </code>
             </div>
+
+            {result.ssh ? (
+              <div>
+                <p className="text-white/40 text-xs mb-1">Connexion SSH</p>
+                <code className="bg-white/10 text-white px-3 py-1.5 rounded-lg text-sm font-mono">
+                  {result.ssh}
+                </code>
+              </div>
+            ) : (
+              <div>
+                <p className="text-white/40 text-xs mb-1">Lien d'accès</p>
+                <a
+                  href={result.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-white underline underline-offset-2 text-sm hover:text-white/80"
+                >
+                  {result.link}
+                </a>
+              </div>
+            )}
+
             <div>
               <p className="text-white/40 text-xs mb-1">Mot de passe</p>
               <code className="bg-white/10 text-white px-3 py-1.5 rounded-lg text-sm font-mono">

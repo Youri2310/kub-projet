@@ -1,4 +1,3 @@
-#Provider Docker
 terraform {
   required_providers {
     docker = {
@@ -8,18 +7,12 @@ terraform {
   }
 }
 
-provider "docker" {
-  alias    = "mac"
-  host     = "ssh://user@localhost:22"
-  ssh_opts = ["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null"]
+provider "docker" {}
+
+resource "docker_network" "net" {
+  name = "provision-net"
 }
 
-provider "docker" {
-  alias = "windows"
-  host  = "tcp://localhost:2375"
-}
-
-#Mapping
 locals {
   images = {
     wordpress = "wordpress:latest"
@@ -29,91 +22,102 @@ locals {
   }
 
   ports = {
-    wordpress = [
-      { internal = 80, external = 80 },
-      { internal = 443, external = 443 }
-    ]
-    node = [
-      { internal = 3000, external = 3000 }
-    ]
-    multisite = [
-      { internal = 80, external = 80 },
-      { internal = 443, external = 443 }
-    ]
-    debian = []
+    wordpress = 8090
+    node      = 3001
+    multisite = 8091
+    debian    = 2222
+  }
+
+  internal = {
+    wordpress = 80
+    node      = 3000
+    multisite = 80
+    debian    = 22
   }
 
   envs = {
     wordpress = [
       "WORDPRESS_DB_HOST=db",
-      "WORDPRESS_DB_USER=root",
-      "WORDPRESS_DB_PASSWORD=example",
+      "WORDPRESS_DB_USER=wordpress",
+      "WORDPRESS_DB_PASSWORD=${var.root_password}",
       "WORDPRESS_DB_NAME=wordpress"
     ]
     node      = []
     multisite = []
     debian    = []
   }
+
+  commands = {
+    wordpress = null
+    multisite = null
+    node      = ["node", "-e", "require('http').createServer((q,r)=>r.end('Hello Node')).listen(3000)"]
+    debian    = ["bash", "-c", "apt-get update && apt-get install -y openssh-server && mkdir -p /run/sshd && echo root:${var.root_password} | chpasswd && sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && /usr/sbin/sshd -D"]
+  }
 }
 
-resource "docker_image" "vm_mac" {
-  count = var.target_node == "mac" ? 1 : 0
-
-  provider     = docker.mac
-  name         = local.images[var.machine_type]
+resource "docker_image" "db" {
+  count        = var.machine_type == "wordpress" ? 1 : 0
+  name         = "mariadb:11"
   keep_locally = true
 }
 
-resource "docker_image" "vm_windows" {
-  count = var.target_node == "windows" ? 1 : 0
+resource "docker_container" "db" {
+  count = var.machine_type == "wordpress" ? 1 : 0
 
-  provider     = docker.windows
-  name         = local.images[var.machine_type]
-  keep_locally = true
-}
+  name  = "db"
+  image = docker_image.db[0].image_id
 
-locals {
-  image_id = var.target_node == "mac" ? docker_image.vm_mac[0].image_id : docker_image.vm_windows[0].image_id
-}
+  env = [
+    "MYSQL_ROOT_PASSWORD=${var.root_password}",
+    "MYSQL_DATABASE=wordpress",
+    "MYSQL_USER=wordpress",
+    "MYSQL_PASSWORD=${var.root_password}"
+  ]
 
-
-# Démarrer container
-resource "docker_container" "vm" {
-  name  = "provisioned-${var.machine_type}-${formatdate("YYYYMMDDhhmm", timestamp())}"
-  image = local.image_id
-
-  memory = var.ram
-
-  env = local.envs[var.machine_type]
-
-  volumes {
-    host_path      = "/var/lib/docker/volumes/${var.machine_type}-data/_data"
-    container_path = "/data"
-    read_only      = false
+  networks_advanced {
+    name = docker_network.net.name
   }
 
-  dynamic "ports" {
-    for_each = local.ports[var.machine_type]
+  restart = "unless-stopped"
+}
 
-    content {
-      internal = ports.value.internal
-      external = ports.value.external
-      protocol = "tcp"
-    }
+resource "docker_image" "vm" {
+  name         = local.images[var.machine_type]
+  keep_locally = true
+}
+
+resource "docker_container" "vm" {
+  name  = "provisioned-${var.machine_type}-${formatdate("YYYYMMDDhhmm", timestamp())}"
+  image = docker_image.vm.image_id
+
+  memory  = var.ram
+  env     = local.envs[var.machine_type]
+  command = local.commands[var.machine_type]
+
+  networks_advanced {
+    name = docker_network.net.name
+  }
+
+  ports {
+    internal = local.internal[var.machine_type]
+    external = local.ports[var.machine_type]
+    protocol = "tcp"
   }
 
   restart = "unless-stopped"
   logs    = true
+
+  depends_on = [docker_container.db]
 }
 
-
-#Sortie
 output "container_id" {
-  value       = docker_container.vm.id
-  description = "ID du conteneur"
+  value = docker_container.vm.id
 }
 
 output "container_name" {
-  value       = docker_container.vm.name
-  description = "Nom du conteneur"
+  value = docker_container.vm.name
+}
+
+output "container_port" {
+  value = local.ports[var.machine_type]
 }
