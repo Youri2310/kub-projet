@@ -103,7 +103,7 @@ export default function MachineStep({ config, setConfig, onNext }: Props) {
 
                 <div>
                   <p className="font-semibold text-sm text-white">{labels[m.machineType] ?? m.machineType}</p>
-                  <p className="text-xs text-white/40 mt-0.5">{m.targetNode === "mac" ? "🍎 Mac" : "🪟 Windows"}</p>
+                  <p className="text-xs text-white/40 mt-0.5">{m.targetNode === "mac" ? "Mac" : "Windows"}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
