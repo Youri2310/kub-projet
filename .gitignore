@@ -49,6 +49,3 @@ terraform/terraform.tfvars
 *.tfstate
 *.tfstate.*
 terraform/terraform.tfstate.d/
-
-# machines enregistrées
-machines.json

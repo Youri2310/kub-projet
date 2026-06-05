@@ -126,3 +126,23 @@ output "password" {
   value     = random_password.mdp.result
   sensitive = true
 }
+
+output "machine_type" {
+  value = var.machine_type
+}
+
+output "target_node" {
+  value = var.target_node
+}
+
+output "cpu" {
+  value = var.cpu
+}
+
+output "ram" {
+  value = var.ram
+}
+
+output "disk" {
+  value = var.disk
+}

@@ -34,12 +34,29 @@ type Props = {
 export default function MachineStep({ config, setConfig, onNext }: Props) {
   const [running, setRunning] = useState<RunningMachine[]>([]);
 
+  const [sentId, setSentId] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/provision")
       .then((r) => r.json())
       .then((d) => setRunning(d.machines ?? []))
       .catch(() => {});
   }, []);
+
+  const showPassword = async (id: string) => {
+    setSentId(id);
+    try {
+      await fetch("/api/provision", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+    } catch (e) {
+      console.error(e);
+    }
+    setTimeout(() => setSentId(null), 2000);
+  };
+
   return (
     <div>
       <div className="mb-8 text-center">
@@ -134,10 +151,10 @@ export default function MachineStep({ config, setConfig, onNext }: Props) {
                     </button>
                   )}
                   <button
-                    onClick={() => fetch("/api/display", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id }) })}
+                    onClick={() => showPassword(m.id)}
                     className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 text-xs font-medium hover:bg-white/10 hover:text-white transition cursor-pointer text-center"
                   >
-                    Afficher mdp
+                    {sentId === m.id ? "Envoyé à l'ESP32 ✓" : "Afficher mdp"}
                   </button>
                 </div>
               </div>

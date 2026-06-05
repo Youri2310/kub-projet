@@ -1,28 +1,93 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { execSync } from "child_process";
-import fs from "fs";
 import path from "path";
 
 const tfDir = path.join(process.cwd(), "terraform");
-const dbFile = path.join(process.cwd(), "machines.json");
 
-function readMachines() {
+function tf(cmd: string) {
+  return execSync("terraform " + cmd, { cwd: tfDir }).toString();
+}
+
+function isAlive(name: string) {
   try {
-    return JSON.parse(fs.readFileSync(dbFile, "utf8"));
+    return execSync(`docker ps -q --filter name=${name}`).toString().trim() !== "";
   } catch {
-    return [];
+    return false;
   }
 }
 
-function saveMachine(m: object) {
-  const all = readMachines();
-  all.unshift(m);
-  fs.writeFileSync(dbFile, JSON.stringify(all, null, 2));
+function accessFor(machineType: string, targetNode: string, port: number) {
+  if (machineType === "debian") {
+    const knownHostsFile = targetNode === "windows" ? "NUL" : "/dev/null";
+    return `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=${knownHostsFile} root@localhost -p ${port}`;
+  }
+  return "http://localhost:" + port;
+}
+
+async function sendToEsp(mdp: string) {
+  const key = Buffer.from("1234567890abcdef");
+  const iv = Buffer.from("abcdef1234567890");
+  const cipher = crypto.createCipheriv("aes-128-cbc", key, iv);
+  const encryptedPass = cipher.update(mdp, "utf8", "base64") + cipher.final("base64");
+
+  const host = process.env.ESP32_HOST ?? "http://192.168.190.137";
+  await fetch(host + "/message", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "msg=" + encodeURIComponent(encryptedPass),
+  });
 }
 
 export async function GET() {
-  return NextResponse.json({ machines: readMachines() });
+  const machines = [];
+  try {
+    const list = tf("workspace list")
+      .split("\n")
+      .map((l) => l.replace("*", "").trim())
+      .filter((l) => l && l !== "default");
+
+    for (const ws of list) {
+      try {
+        tf("workspace select " + ws);
+        const out = JSON.parse(tf("output -json"));
+        const name = out.container_name?.value;
+
+        if (name && isAlive(name)) {
+          const type = out.machine_type?.value ?? "?";
+          const node = out.target_node?.value ?? "mac";
+          machines.push({
+            id: ws,
+            machineType: type,
+            targetNode: node,
+            cpu: out.cpu?.value ?? "?",
+            ram: out.ram?.value ?? "?",
+            disk: out.disk?.value ?? "?",
+            access: out.container_port?.value ? accessFor(type, node, out.container_port.value) : "",
+          });
+        } else {
+          // container supprime dans docker -> on nettoie le workspace orphelin
+          try {
+            tf(`destroy -auto-approve -var="machine_type=${out.machine_type?.value ?? "debian"}" -var="target_node=${out.target_node?.value ?? "mac"}" -var="cpu=${out.cpu?.value ?? 1}" -var="ram=${out.ram?.value ?? 1024}" -var="disk=${out.disk?.value ?? 10}" -var="id=${ws}"`);
+          } catch (e) {
+            console.log(e);
+          }
+          tf("workspace select default");
+          tf("workspace delete -force " + ws);
+        }
+      } catch (e) {
+        console.log("workspace " + ws + " ignore :", e);
+      }
+    }
+  } catch (e) {
+    console.log(e);
+  } finally {
+    try {
+      tf("workspace select default");
+    } catch {}
+  }
+
+  return NextResponse.json({ machines });
 }
 
 export async function POST(req: NextRequest) {
@@ -47,48 +112,39 @@ export async function POST(req: NextRequest) {
     const out = JSON.parse(execSync("terraform output -json", { cwd: tfDir }).toString());
     const port = out.container_port?.value ?? 80;
     const mdp = out.password.value;
-    let encryptedPass = "";
-    try {
-      const key = Buffer.from("1234567890abcdef");
-      const iv = Buffer.from("abcdef1234567890");
-      const cipher = crypto.createCipheriv("aes-128-cbc", key, iv);
-      encryptedPass = cipher.update(mdp, "utf8", "base64") + cipher.final("base64");
 
-      const host = process.env.ESP32_HOST ?? "http://192.168.190.137";
-      await fetch(host + "/message", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "msg=" + encodeURIComponent(encryptedPass),
-      });
+    try {
+      await sendToEsp(mdp);
     } catch (error) {
       console.log(error);
     }
 
-    const knownHostsFile = data.targetNode === "windows" ? "NUL" : "/dev/null";
-    const isDebian = data.machineType === "debian";
-    const access = isDebian
-      ? `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=${knownHostsFile} root@localhost -p ${port}`
-      : "http://localhost:" + port;
+    const access = accessFor(data.machineType, data.targetNode, port);
 
-    saveMachine({
-      id,
-      machineType: data.machineType,
-      targetNode: data.targetNode,
-      cpu: data.cpu,
-      ram: data.ram,
-      disk: data.disk,
-      port,
-      access,
-      encryptedPass,
-      createdAt: new Date().toISOString(),
-    });
-
-    if (isDebian) {
-      return NextResponse.json({ login: "root", ssh: access, pass: mdp });
+    if (data.machineType === "debian") {
+      return NextResponse.json({ login: "root", ssh: access });
     }
-    return NextResponse.json({ login: "root", link: access, pass: mdp });
+    return NextResponse.json({ login: "root", link: access });
   } catch (e) {
     console.log("ca a planté avec terraform :", e);
     return NextResponse.json({ error: "erreur terraform" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const { id } = await req.json();
+
+  try {
+    tf("workspace select " + id);
+    const mdp = tf("output -raw password").trim();
+    await sendToEsp(mdp);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.log("erreur envoi esp32 :", e);
+    return NextResponse.json({ error: "impossible d'envoyer le mdp" }, { status: 500 });
+  } finally {
+    try {
+      tf("workspace select default");
+    } catch {}
   }
 }
