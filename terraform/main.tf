@@ -1,13 +1,22 @@
-terraform {
+﻿terraform {
   required_providers {
     docker = {
       source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
       version = "~> 3.0"
     }
   }
 }
 
 provider "docker" {}
+
+resource "random_password" "mdp" {
+  length  = 16
+  special = false
+}
 
 resource "docker_network" "net" {
   name = "net-${var.id}"
@@ -32,7 +41,7 @@ locals {
     wordpress = [
       "WORDPRESS_DB_HOST=db-${var.id}",
       "WORDPRESS_DB_USER=wordpress",
-      "WORDPRESS_DB_PASSWORD=${var.root_password}",
+      "WORDPRESS_DB_PASSWORD=${random_password.mdp.result}",
       "WORDPRESS_DB_NAME=wordpress"
     ]
     node      = []
@@ -44,7 +53,7 @@ locals {
     wordpress = null
     multisite = null
     node      = ["node", "-e", "require('http').createServer((q,r)=>r.end('Hello Node')).listen(3000)"]
-    debian    = ["bash", "-c", "apt-get update && apt-get install -y openssh-server && mkdir -p /run/sshd && echo root:${var.root_password} | chpasswd && sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && /usr/sbin/sshd -D"]
+    debian    = ["bash", "-c", "apt-get update && apt-get install -y openssh-server && mkdir -p /run/sshd && echo root:${random_password.mdp.result} | chpasswd && sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && /usr/sbin/sshd -D"]
   }
 }
 
@@ -61,10 +70,10 @@ resource "docker_container" "db" {
   image = docker_image.db[0].image_id
 
   env = [
-    "MYSQL_ROOT_PASSWORD=${var.root_password}",
+    "MYSQL_ROOT_PASSWORD=${random_password.mdp.result}",
     "MYSQL_DATABASE=wordpress",
     "MYSQL_USER=wordpress",
-    "MYSQL_PASSWORD=${var.root_password}"
+    "MYSQL_PASSWORD=${random_password.mdp.result}"
   ]
 
   networks_advanced {
@@ -111,4 +120,9 @@ output "container_name" {
 
 output "container_port" {
   value = docker_container.vm.ports[0].external
+}
+
+output "password" {
+  value     = random_password.mdp.result
+  sensitive = true
 }

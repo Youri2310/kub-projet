@@ -29,24 +29,6 @@ export async function POST(req: NextRequest) {
   const data = await req.json();
   console.log("config recue : ", data);
 
-  const mdp = crypto.randomBytes(8).toString("hex");
-  let encryptedPass = "";
-  try {
-    const key = Buffer.from("1234567890abcdef");
-    const iv = Buffer.from("abcdef1234567890");
-    const cipher = crypto.createCipheriv("aes-128-cbc", key, iv);
-    encryptedPass = cipher.update(mdp, "utf8", "base64") + cipher.final("base64");
-
-    const host = process.env.ESP32_HOST ?? "http://192.168.190.137";
-    await fetch(host + "/message", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "msg=" + encodeURIComponent(encryptedPass),
-    });
-  } catch (error) {
-    console.log(error);
-  }
-
   const id = data.machineType + "-" + crypto.randomBytes(3).toString("hex");
 
   const vars =
@@ -55,7 +37,6 @@ export async function POST(req: NextRequest) {
     `-var="cpu=${data.cpu}" ` +
     `-var="ram=${data.ram}" ` +
     `-var="disk=${data.disk}" ` +
-    `-var="root_password=${mdp}" ` +
     `-var="id=${id}"`;
 
   try {
@@ -65,6 +46,23 @@ export async function POST(req: NextRequest) {
 
     const out = JSON.parse(execSync("terraform output -json", { cwd: tfDir }).toString());
     const port = out.container_port?.value ?? 80;
+    const mdp = out.password.value;
+    let encryptedPass = "";
+    try {
+      const key = Buffer.from("1234567890abcdef");
+      const iv = Buffer.from("abcdef1234567890");
+      const cipher = crypto.createCipheriv("aes-128-cbc", key, iv);
+      encryptedPass = cipher.update(mdp, "utf8", "base64") + cipher.final("base64");
+
+      const host = process.env.ESP32_HOST ?? "http://192.168.190.137";
+      await fetch(host + "/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "msg=" + encodeURIComponent(encryptedPass),
+      });
+    } catch (error) {
+      console.log(error);
+    }
 
     const knownHostsFile = data.targetNode === "windows" ? "NUL" : "/dev/null";
     const isDebian = data.machineType === "debian";

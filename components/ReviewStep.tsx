@@ -15,7 +15,7 @@ type Props = {
 
 export default function ReviewStep({ config, onBack }: Props) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ login: string; link?: string; ssh?: string; pass: string } | null>(null);
+  const [result, setResult] = useState<{ login: string; link?: string; ssh?: string } | null>(null);
 
   const handleProvision = async () => {
     setLoading(true);
@@ -33,7 +33,7 @@ export default function ReviewStep({ config, onBack }: Props) {
         body: JSON.stringify(config),
       });
       const data = await res.json();
-      setResult({ login: data.login ?? "root", link: data.link, ssh: data.ssh, pass: data.pass ?? "N/A" });
+      setResult({ login: data.login ?? "root", link: data.link, ssh: data.ssh });
     } catch (e) {
       console.error(e);
     } finally {
@@ -123,13 +123,6 @@ export default function ReviewStep({ config, onBack }: Props) {
                 </a>
               </div>
             )}
-
-            <div>
-              <p className="text-white/40 text-xs mb-1">Mot de passe</p>
-              <code className="bg-white/10 text-white px-3 py-1.5 rounded-lg text-sm font-mono">
-                {result.pass}
-              </code>
-            </div>
           </div>
         </div>
       )}
