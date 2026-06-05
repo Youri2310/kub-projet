@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Config } from "@/app/page";
 
 const machines = [
@@ -7,6 +8,23 @@ const machines = [
   { id: "debian", name: "VPS Debian", description: "Machine Debian brute, configurez-la comme vous voulez.", icon: "🐧", tag: "Système" },
 ];
 
+const labels: Record<string, string> = {
+  wordpress: "WordPress",
+  node: "Server Node",
+  multisite: "Server Multisite",
+  debian: "VPS Debian",
+};
+
+type RunningMachine = {
+  id: string;
+  machineType: string;
+  targetNode: string;
+  cpu: number;
+  ram: number;
+  disk: number;
+  access: string;
+};
+
 type Props = {
   config: Config;
   setConfig: (c: Partial<Config>) => void;
@@ -14,6 +32,14 @@ type Props = {
 };
 
 export default function MachineStep({ config, setConfig, onNext }: Props) {
+  const [running, setRunning] = useState<RunningMachine[]>([]);
+
+  useEffect(() => {
+    fetch("/api/provision")
+      .then((r) => r.json())
+      .then((d) => setRunning(d.machines ?? []))
+      .catch(() => {});
+  }, []);
   return (
     <div>
       <div className="mb-8 text-center">
@@ -57,6 +83,41 @@ export default function MachineStep({ config, setConfig, onNext }: Props) {
           Continuer →
         </button>
       </div>
+
+      {running.length > 0 && (
+        <div className="mt-12">
+          <h3 className="text-sm font-semibold uppercase tracking-widest text-white/40 mb-4">
+            Machines en cours ({running.length})
+          </h3>
+          <div className="space-y-3">
+            {running.map((m) => (
+              <div
+                key={m.id}
+                className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10"
+              >
+                <div>
+                  <p className="font-semibold text-sm">{labels[m.machineType] ?? m.machineType}</p>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    {m.targetNode === "mac" ? "Mac" : "Windows"} · {m.cpu} cœur{m.cpu > 1 ? "s" : ""} · {m.ram} Mo · {m.disk} Go
+                  </p>
+                </div>
+                {m.access.startsWith("http") ? (
+                  <a
+                    href={m.access}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-white underline underline-offset-2 hover:text-white/80 shrink-0 ml-3"
+                  >
+                    Ouvrir →
+                  </a>
+                ) : (
+                  <span className="text-xs text-white/40 shrink-0 ml-3">SSH</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,3 +21,7 @@ variable "disk" {
 variable "root_password" {
   type = string
 }
+
+variable "id" {
+  type = string
+}

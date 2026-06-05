@@ -10,7 +10,7 @@ terraform {
 provider "docker" {}
 
 resource "docker_network" "net" {
-  name = "provision-net"
+  name = "net-${var.id}"
 }
 
 locals {
@@ -19,13 +19,6 @@ locals {
     node      = "node:latest"
     multisite = "nginx:latest"
     debian    = "debian:12"
-  }
-
-  ports = {
-    wordpress = 8090
-    node      = 3001
-    multisite = 8091
-    debian    = 2222
   }
 
   internal = {
@@ -37,7 +30,7 @@ locals {
 
   envs = {
     wordpress = [
-      "WORDPRESS_DB_HOST=db",
+      "WORDPRESS_DB_HOST=db-${var.id}",
       "WORDPRESS_DB_USER=wordpress",
       "WORDPRESS_DB_PASSWORD=${var.root_password}",
       "WORDPRESS_DB_NAME=wordpress"
@@ -64,7 +57,7 @@ resource "docker_image" "db" {
 resource "docker_container" "db" {
   count = var.machine_type == "wordpress" ? 1 : 0
 
-  name  = "db"
+  name  = "db-${var.id}"
   image = docker_image.db[0].image_id
 
   env = [
@@ -87,7 +80,7 @@ resource "docker_image" "vm" {
 }
 
 resource "docker_container" "vm" {
-  name  = "provisioned-${var.machine_type}-${formatdate("YYYYMMDDhhmm", timestamp())}"
+  name  = "provisioned-${var.machine_type}-${var.id}"
   image = docker_image.vm.image_id
 
   memory  = var.ram
@@ -100,8 +93,6 @@ resource "docker_container" "vm" {
 
   ports {
     internal = local.internal[var.machine_type]
-    external = local.ports[var.machine_type]
-    protocol = "tcp"
   }
 
   restart = "unless-stopped"
@@ -119,5 +110,5 @@ output "container_name" {
 }
 
 output "container_port" {
-  value = local.ports[var.machine_type]
+  value = docker_container.vm.ports[0].external
 }

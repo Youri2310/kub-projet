@@ -5,6 +5,25 @@ import fs from "fs";
 import path from "path";
 
 const tfDir = path.join(process.cwd(), "terraform");
+const dbFile = path.join(process.cwd(), "machines.json");
+
+function readMachines() {
+  try {
+    return JSON.parse(fs.readFileSync(dbFile, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function saveMachine(m: object) {
+  const all = readMachines();
+  all.unshift(m);
+  fs.writeFileSync(dbFile, JSON.stringify(all, null, 2));
+}
+
+export async function GET() {
+  return NextResponse.json({ machines: readMachines() });
+}
 
 export async function POST(req: NextRequest) {
   const data = await req.json();
@@ -28,36 +47,47 @@ export async function POST(req: NextRequest) {
     console.log(error);
   }
 
-  const vars = `machine_type = "${data.machineType}"
-target_node = "${data.targetNode}"
-cpu = ${data.cpu}
-ram = ${data.ram}
-disk = ${data.disk}
-root_password = "${mdp}"`;
+  const id = data.machineType + "-" + crypto.randomBytes(3).toString("hex");
 
-  fs.writeFileSync(path.join(tfDir, "terraform.tfvars"), vars);
+  const vars =
+    `-var="machine_type=${data.machineType}" ` +
+    `-var="target_node=${data.targetNode}" ` +
+    `-var="cpu=${data.cpu}" ` +
+    `-var="ram=${data.ram}" ` +
+    `-var="disk=${data.disk}" ` +
+    `-var="root_password=${mdp}" ` +
+    `-var="id=${id}"`;
 
   try {
     execSync("terraform init -input=false", { cwd: tfDir, stdio: "inherit" });
-    execSync("terraform apply -auto-approve -input=false", { cwd: tfDir, stdio: "inherit" });
+    execSync("terraform workspace new " + id, { cwd: tfDir, stdio: "inherit" });
+    execSync("terraform apply -auto-approve -input=false " + vars, { cwd: tfDir, stdio: "inherit" });
 
     const out = JSON.parse(execSync("terraform output -json", { cwd: tfDir }).toString());
     const port = out.container_port?.value ?? 80;
 
-    if (data.machineType === "debian") {
-      const knownHostsFile = data.targetNode === "windows" ? "NUL" : "/dev/null";
-      return NextResponse.json({
-        login: "root",
-        ssh: `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=${knownHostsFile} root@localhost -p ${port}`,
-        pass: mdp,
-      });
-    }
+    const knownHostsFile = data.targetNode === "windows" ? "NUL" : "/dev/null";
+    const isDebian = data.machineType === "debian";
+    const access = isDebian
+      ? `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=${knownHostsFile} root@localhost -p ${port}`
+      : "http://localhost:" + port;
 
-    return NextResponse.json({
-      login: "root",
-      link: "http://localhost:" + port,
-      pass: mdp,
+    saveMachine({
+      id,
+      machineType: data.machineType,
+      targetNode: data.targetNode,
+      cpu: data.cpu,
+      ram: data.ram,
+      disk: data.disk,
+      port,
+      access,
+      createdAt: new Date().toISOString(),
     });
+
+    if (isDebian) {
+      return NextResponse.json({ login: "root", ssh: access, pass: mdp });
+    }
+    return NextResponse.json({ login: "root", link: access, pass: mdp });
   } catch (e) {
     console.log("ca a planté avec terraform :", e);
     return NextResponse.json({ error: "erreur terraform" }, { status: 500 });
