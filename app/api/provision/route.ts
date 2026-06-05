@@ -45,9 +45,10 @@ root_password = "${mdp}"`;
     const port = out.container_port?.value ?? 80;
 
     if (data.machineType === "debian") {
+      const knownHostsFile = data.targetNode === "windows" ? "NUL" : "/dev/null";
       return NextResponse.json({
         login: "root",
-        ssh: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL root@localhost -p " + port,
+        ssh: `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=${knownHostsFile} root@localhost -p ${port}`,
         pass: mdp,
       });
     }
