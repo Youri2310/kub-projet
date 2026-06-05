@@ -114,24 +114,32 @@ export default function MachineStep({ config, setConfig, onNext }: Props) {
                   ))}
                 </div>
 
-                {m.access.startsWith("http") ? (
-                  <a
-                    href={m.access}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-auto px-3 py-1.5 rounded-lg bg-white text-[#0f1117] text-xs font-semibold hover:bg-white/90 transition text-center"
-                  >
-                    Ouvrir →
-                  </a>
-                ) : (
+                <div className="mt-auto flex flex-col gap-1.5">
+                  {m.access.startsWith("http") ? (
+                    <a
+                      href={m.access}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-white text-[#0f1117] text-xs font-semibold hover:bg-white/90 transition text-center"
+                    >
+                      Ouvrir →
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => navigator.clipboard.writeText(m.access)}
+                      className="px-3 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs font-medium hover:bg-white/20 hover:text-white transition cursor-pointer text-center"
+                      title={m.access}
+                    >
+                      Copier SSH
+                    </button>
+                  )}
                   <button
-                    onClick={() => navigator.clipboard.writeText(m.access)}
-                    className="mt-auto px-3 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs font-medium hover:bg-white/20 hover:text-white transition cursor-pointer text-center"
-                    title={m.access}
+                    onClick={() => fetch("/api/display", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: m.id }) })}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/40 text-xs font-medium hover:bg-white/10 hover:text-white transition cursor-pointer text-center"
                   >
-                    Copier SSH
+                    Afficher mdp
                   </button>
-                )}
+                </div>
               </div>
             ))}
           </div>
