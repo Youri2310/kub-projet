@@ -86,32 +86,51 @@ export default function MachineStep({ config, setConfig, onNext }: Props) {
 
       {running.length > 0 && (
         <div className="mt-12">
-          <h3 className="text-sm font-semibold uppercase tracking-widest text-white/40 mb-4">
-            Machines en cours ({running.length})
-          </h3>
-          <div className="space-y-3">
+          <div className="flex items-center gap-2 mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/40">Machines en cours</p>
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-xs font-bold">{running.length}</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {running.map((m) => (
               <div
                 key={m.id}
-                className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10"
+                className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all flex flex-col gap-3"
               >
-                <div>
-                  <p className="font-semibold text-sm">{labels[m.machineType] ?? m.machineType}</p>
-                  <p className="text-xs text-white/40 mt-0.5">
-                    {m.targetNode === "mac" ? "Mac" : "Windows"} · {m.cpu} cœur{m.cpu > 1 ? "s" : ""} · {m.ram} Mo · {m.disk} Go
-                  </p>
+                <div className="flex items-start justify-between">
+                  <span className="text-xl">{labels[m.machineType] === "WordPress" ? "🌐" : labels[m.machineType] === "Server Node" ? "⚙️" : labels[m.machineType] === "Server Multisite" ? "🗂️" : "🐧"}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1" />
                 </div>
+
+                <div>
+                  <p className="font-semibold text-sm text-white">{labels[m.machineType] ?? m.machineType}</p>
+                  <p className="text-xs text-white/40 mt-0.5">{m.targetNode === "mac" ? "🍎 Mac" : "🪟 Windows"}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[`${m.cpu} vCPU`, `${m.ram} Mo`, `${m.disk} Go`].map((tag) => (
+                    <span key={tag} className="px-2 py-0.5 rounded-md bg-white/10 text-white/50 text-xs font-medium">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
                 {m.access.startsWith("http") ? (
                   <a
                     href={m.access}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-white underline underline-offset-2 hover:text-white/80 shrink-0 ml-3"
+                    className="mt-auto px-3 py-1.5 rounded-lg bg-white text-[#0f1117] text-xs font-semibold hover:bg-white/90 transition text-center"
                   >
                     Ouvrir →
                   </a>
                 ) : (
-                  <span className="text-xs text-white/40 shrink-0 ml-3">SSH</span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(m.access)}
+                    className="mt-auto px-3 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs font-medium hover:bg-white/20 hover:text-white transition cursor-pointer text-center"
+                    title={m.access}
+                  >
+                    Copier SSH
+                  </button>
                 )}
               </div>
             ))}
